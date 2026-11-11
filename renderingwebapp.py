@@ -1,133 +1,62 @@
-import os
+import io
 import time
-import shutil
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+import streamlit as st
 from PIL import Image, ImageEnhance, ImageFilter
 
-app = FastAPI()
+# Page setup
+st.set_page_config(page_title="Pro Image Renderer", page_icon="🚀", layout="wide")
 
-# إنشاء مجلدات للملفات المرفوعة والنتائج
-UPLOAD_DIR = "uploads"
-RESULT_DIR = "results"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(RESULT_DIR, exist_ok=True)
+st.title("🚀 منصة الرندرة الاحترافية للصور (Pro Image Renderer)")
+st.markdown("ارفع صورتك واضبط إعدادات الإضاءة والتفاصيل للحصول على رندرة عالية الجودة.")
 
-# دالة الرندرة والمعالجة الاحترافية (تنفذ في الخلفية)
-def heavy_rendering_task(file_path: str, output_path: str, brightness: float, contrast: float):
-    try:
-        # محاكاة عملية رندرة أو معالجة معقدة ثقيلة
-        time.sleep(3) 
-        
-        # فتح الصورة والبدء في الرندرة والمعالجة الاحترافية
-        with Image.open(file_path) as img:
-            # 1. تحسين الإضاءة والتباين
-            img = ImageEnhance.Brightness(img).enhance(brightness)
-            img = ImageEnhance.Contrast(img).enhance(contrast)
-            
-            # 2. تطبيق فلتر لزيادة حدة التفاصيل (رندرة ناعمة واحترافية)
-            img = img.filter(ImageFilter.SHARPEN)
-            
-            # 3. حفظ النتيجة بجودة عالية جداً 100%
-            img.save(output_path, quality=100, subsampling=0)
-            
-        print(f"Task completed successfully: {output_path}")
-    except Exception as e:
-        print(f"Error during rendering: {str(e)}")
+# Sidebar controls for rendering parameters
+st.sidebar.header("⚙️ إعدادات الرندرة (Render Settings)")
+brightness = st.sidebar.slider("الإضاءة (Brightness)", 0.5, 2.5, 1.15, 0.05)
+contrast = st.sidebar.slider("التباين (Contrast)", 0.5, 2.5, 1.15, 0.05)
+sharpness = st.sidebar.slider("حدة التفاصيل (Sharpness)", 0.0, 3.0, 1.3, 0.1)
+color = st.sidebar.slider("تشبع الألوان (Color Vibrance)", 0.0, 2.5, 1.1, 0.05)
+apply_detail = st.sidebar.checkbox("تفعيل تحسين التفاصيل الدقيقة (Detail Pass)", value=True)
 
-# واجهة المستخدم (HTML) تظهر عند فتح رابط الموقع
-@app.get("/", response_class=HTMLResponse)
-async def main_page():
-    return """
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-        <meta charset="UTF-8">
-        <title>منصة الرندرة الاحترافية أونلاين</title>
-        <style>
-            body { font-family: Tahoma, sans-serif; background-color: #1a1a1a; color: #fff; text-align: center; padding: 50px; }
-            .container { max-width: 500px; margin: auto; background: #2d2d2d; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-            input, button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; box-sizing: border-box; }
-            input[type="file"] { background: #3d3d3d; color: #fff; }
-            button { background-color: #007bff; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; }
-            button:hover { background-color: #0056b3; }
-            #status { margin-top: 20px; font-weight: bold; color: #ffc107; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h2>رندرة الصور الإحترافية 🚀</h2>
-            <form id="uploadForm">
-                <input type="file" id="imageFile" accept="image/*" required>
-                <label>نسبة الإضاءة:</label>
-                <input type="number" id="brightness" value="1.2" step="0.1" min="0">
-                <label>نسبة التباين:</label>
-                <input type="number" id="contrast" value="1.1" step="0.1" min="0">
-                <button type="submit">ابدأ الرندرة أونلاين</button>
-            </form>
-            <div id="status"></div>
-        </div>
+# File uploader
+uploaded_file = st.file_uploader("اختر صورة للرندرة (PNG, JPG, WEBP)", type=["png", "jpg", "jpeg", "webp"])
 
-        <script>
-            document.getElementById('uploadForm').onsubmit = async (e) => {
-                e.preventDefault();
-                const statusDiv = document.getElementById('status');
-                statusDiv.innerText = "جاري رفع الصورة وبدء الرندرة الحسابية...";
-                
-                const formData = new FormData();
-                formData.append("file", document.getElementById('imageFile').files[0]);
-                
-                const brightness = document.getElementById('brightness').value;
-                const contrast = document.getElementById('contrast').value;
-
-                // إرسال الطلب للسيرفر لتبدأ الرندرة في الخلفية
-                const response = await fetch(`/render/?brightness=${brightness}&contrast=${contrast}`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                if(data.status === "processing") {
-                    statusDiv.innerHTML = `جاري المعالجة... <br> انتظر قليلاً ثم قم بتحديث الرابط لتحميل النتيجة من هنا: <br> <a href="/static/${data.result_filename}" target="_blank" style="color:#28a745;">[رابط الصورة المرندرة]</a>`;
-                } else {
-                    statusDiv.innerText = "حدث خطأ أثناء المعالجة.";
-                }
-            };
-        </script>
-    </body>
-    </html>
-    """
-
-# استقبال الصورة وبدء معالجتها خلف الكواليس دون تعطيل الموقع
-@app.post("/render/")
-async def start_render(
-    background_tasks: BackgroundTasks, 
-    file: UploadFile = File(...), 
-    brightness: float = 1.0, 
-    contrast: float = 1.0
-):
-    # تسمية الملفات وحفظها
-    filename = file.filename
-    uploaded_path = os.path.join(UPLOAD_DIR, filename)
-    result_filename = f"rendered_{filename}"
-    result_path = os.path.join(RESULT_DIR, result_filename)
+if uploaded_file is not None:
+    original_image = Image.open(uploaded_file).convert("RGB")
     
-    with open(uploaded_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # إضافة المهمة الثقيلة لتعمل في الخلفية (Background Task) ليبقى الموقع سريعاً
-    background_tasks.add_task(heavy_rendering_task, uploaded_path, result_path, brightness, contrast)
-    
-    return JSONResponse(content={
-        "status": "processing", 
-        "message": "الرندرة تعمل في الخلفية الآن",
-        "result_filename": result_filename
-    })
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("الصورة الأصلية (Original)")
+        st.image(original_image, use_container_width=True)
 
-# مشاركة مجلد النتائج ليتمكن المستخدم من تحميل الصورة منه لاحقاً
-app.mount("/static", StaticFiles(directory=RESULT_DIR), name="static")
+    # Render button
+    if st.button("✨ ابدأ الرندرة الآن (Start Render)", type="primary"):
+        with st.spinner("جاري معالجة الإضاءة والظلال والتفاصيل..."):
+            time.sleep(1)  # Simulating heavy render pass
+            
+            # 1. Color & Lighting passes
+            rendered = ImageEnhance.Brightness(original_image).enhance(brightness)
+            rendered = ImageEnhance.Contrast(rendered).enhance(contrast)
+            rendered = ImageEnhance.Color(rendered).enhance(color)
+            rendered = ImageEnhance.Sharpness(rendered).enhance(sharpness)
+            
+            # 2. Detail pass
+            if apply_detail:
+                rendered = rendered.filter(ImageFilter.DETAIL)
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+            # Save high-quality output to memory buffer
+            buf = io.BytesIO()
+            rendered.save(buf, format="PNG", optimize=True)
+            byte_im = buf.getvalue()
+
+        with col2:
+            st.subheader("النتيجة النهائية (Rendered)")
+            st.image(rendered, use_container_width=True)
+            
+            st.download_button(
+                label="📥 تحميل الصورة المرندرة بأعلى جودة (Download PNG)",
+                data=byte_im,
+                file_name=f"rendered_{uploaded_file.name.rsplit('.', 1)[0]}.png",
+                mime="image/png"
+            )
+else:
+    st.info("يرجى رفع صورة من الأعلى للبدء في عملية الرندرة.")
